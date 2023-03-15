@@ -74,6 +74,7 @@
           (setq append "-a "))
         (when (equal (car pair) ':backslash)
           (setq backslash "\\")))
+      (org-babel-mark-block)
       (if tee
           (let ((first-line (format "bash -c 'cat <<%sEOF | %stee %s\"%s\" >> /dev/null"
                                     backslash
@@ -82,7 +83,10 @@
                                     tee))
                 (end-line "EOF'")
                 (body (string-replace "'" "\\'" body)))
-            (kill-new (format "%s\n%s\n%s" first-line body end-line)))
-        (kill-new body)))))
+            (kill-new (format "%s\n%s\n%s" first-line body end-line))
+            (message "Push block body with `shell-cat' onto the kill ring"))
+        (progn
+          (kill-new body)
+          (message "Push block body onto the kill ring"))))))
 
 (provide 'org-shell-cat)
