@@ -5,8 +5,8 @@
 ;; Author: Hirozy
 ;; Maintainer: Hirozy
 ;; Created: Mar 10, 2023
-;; Modified: Mar 15, 2023
-;; Version: 1.0
+;; Modified: Mar 17, 2023
+;; Version: 1.1
 ;; Keywords: shell-cat org-mode
 ;; Homepage: https://github.com/Hirozy/shell-cat
 ;; Package-Requires: ((emacs "28.1") (org-mode "9.6"))
@@ -35,6 +35,16 @@
 
 (require 'ob-core)
 
+(defvar org-babel-tee-file-mark-string
+  ":tee:"
+  "Special text to mark tee file in a block.")
+
+;;;###autoload
+(defun org-babel-insert-tee-file-mark ()
+  "Insert special tee file mark into buffer."
+  (interactive)
+  (insert org-babel-tee-file-mark-string))
+
 (defvar org-babel-header-shell-cat-list
   '((tee . :any)
     (sudo)
@@ -46,12 +56,19 @@
 `:append'         -> Append to exise file.
 `:backslash'      -> cat << EOF to cat <<\EOF.")
 
+;;;###autoload
 (defun org-babel-header-expand-shell-cat ()
   "Expand header args for shell cat."
   (dolist (pair org-babel-header-shell-cat-list)
     (add-to-list 'org-babel-common-header-args-w-values pair)))
 
-(advice-add 'org-mode :after 'org-babel-header-expand-shell-cat)
+(defun org-babel-match-tee-file (body)
+  "Search tee file name from `body', return `nil' if not found."
+  (let* ((tee-begining (string-match org-babel-tee-file-mark-string body))
+         (tee-end (string-match "\n" body tee-begining))
+         (tee-mark-len (length org-babel-tee-file-mark-string)))
+    (when (and tee-begining tee-end (< tee-begining tee-end))
+      (substring body (+ tee-begining tee-mark-len 1)tee-end))))
 
 ;;;###autoload
 (defun org-copy-to-shell-cat ()
@@ -67,7 +84,10 @@
     (when body
       (dolist (pair params)
         (when (equal (car pair) ':tee)
-          (setq tee (cdr pair)))
+          (setq tee
+                (if (cdr pair)
+                    (cdr pair)
+                  (org-babel-match-tee-file body))))
         (when (equal (car pair) ':sudo)
           (setq sudo "sudo "))
         (when (equal (car pair) ':append)
@@ -76,13 +96,16 @@
           (setq backslash "\\")))
       (org-babel-mark-block)
       (if tee
-          (let ((first-line (format "bash -c 'cat <<%sEOF | %stee %s\"%s\" >> /dev/null"
-                                    backslash
-                                    sudo
-                                    append
-                                    tee))
-                (end-line "EOF'")
-                (body (string-replace "'" "\\'" body)))
+          (let* ((first-line (format "bash -c 'cat <<%sEOF | %stee %s\"%s\" >> /dev/null"
+                                     backslash
+                                     sudo
+                                     append
+                                     tee))
+                 (end-line "EOF'")
+                 ;; remove mark lines
+                 (body (replace-regexp-in-string
+                        (format "\\(?:^\\|\n\\).*%s.*\n*" org-babel-tee-file-mark-string) "" body))
+                 (body (string-replace "'" "\\'" body)))
             (kill-new (format "%s\n%s\n%s" first-line body end-line))
             (message "Push block body with `shell-cat' onto the kill ring"))
         (progn
@@ -90,3 +113,4 @@
           (message "Push block body onto the kill ring"))))))
 
 (provide 'org-shell-cat)
+;;; org-shell-cat.el ends here
