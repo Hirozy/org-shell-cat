@@ -94,7 +94,6 @@
           (setq append "-a "))
         (when (equal (car pair) ':backslash)
           (setq backslash "\\")))
-      (org-babel-mark-block)
       (if tee
           (let* ((first-line (format "bash -c 'cat <<%sEOF | %stee %s\"%s\" >> /dev/null"
                                      backslash
