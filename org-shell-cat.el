@@ -6,7 +6,7 @@
 ;; Maintainer: Hirozy
 ;; Created: Mar 10, 2023
 ;; Modified: Mar 17, 2023
-;; Version: 1.1
+;; Version: 1.2
 ;; Keywords: shell-cat org-mode
 ;; Homepage: https://github.com/Hirozy/shell-cat
 ;; Package-Requires: ((emacs "28.1") (org-mode "9.6"))
@@ -35,16 +35,6 @@
 
 (require 'ob-core)
 
-(defvar org-babel-tee-file-mark-string
-  ":tee:"
-  "Special text to mark tee file in a block.")
-
-;;;###autoload
-(defun org-babel-insert-tee-file-mark ()
-  "Insert special tee file mark into buffer."
-  (interactive)
-  (insert org-babel-tee-file-mark-string))
-
 (defvar org-babel-header-shell-cat-list
   '((tee . :any)
     (sudo)
@@ -62,14 +52,6 @@
   (dolist (pair org-babel-header-shell-cat-list)
     (add-to-list 'org-babel-common-header-args-w-values pair)))
 
-(defun org-babel-match-tee-file (body)
-  "Search tee file name from `body', return `nil' if not found."
-  (let* ((tee-begining (string-match org-babel-tee-file-mark-string body))
-         (tee-end (string-match "\n" body tee-begining))
-         (tee-mark-len (length org-babel-tee-file-mark-string)))
-    (when (and tee-begining tee-end (< tee-begining tee-end))
-      (substring body (+ tee-begining tee-mark-len 1)tee-end))))
-
 ;;;###autoload
 (defun org-copy-to-shell-cat ()
   "Copy block to shell cat."
@@ -83,29 +65,23 @@
          (backslash ""))
     (when body
       (dolist (pair params)
-        (when (equal (car pair) ':tee)
-          (setq tee
-                (if (cdr pair)
-                    (cdr pair)
-                  (org-babel-match-tee-file body))))
-        (when (equal (car pair) ':sudo)
+        (when (equal (car pair) :tee)
+          (setq tee (cdr pair)))
+        (when (equal (car pair) :sudo)
           (setq sudo "sudo "))
-        (when (equal (car pair) ':append)
+        (when (equal (car pair) :append)
           (setq append "-a "))
-        (when (equal (car pair) ':backslash)
+        (when (equal (car pair) :backslash)
           (setq backslash "\\")))
       (if tee
-          (let* ((first-line (format "bash -c 'cat <<%sEOF | %stee %s\"%s\" >> /dev/null"
+          (let* ((first-line (format "bash -c 'cat <<%sEOF | %stee %s\"%s\" > /dev/null"
                                      backslash
                                      sudo
                                      append
                                      tee))
                  (end-line "EOF'")
-                 ;; remove mark lines
-                 (body (replace-regexp-in-string
-                        (format "\\(?:^\\|\n\\).*%s.*\n*" org-babel-tee-file-mark-string) "" body))
-                 (body (string-replace "'" "\\'" body)))
-            (kill-new (format "%s\n%s\n%s" first-line body end-line))
+                 (escaped-body (string-replace "'" "\\'" body)))
+            (kill-new (format "%s\n%s\n%s" first-line escaped-body end-line))
             (message "Push block body with `shell-cat' onto the kill ring"))
         (progn
           (kill-new body)
